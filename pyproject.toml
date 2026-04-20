@@ -9,12 +9,6 @@ description = "Community plugins for Soothe agent orchestration framework"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11,<4.0"
-
-[project.urls]
-Homepage = "https://github.com/OpenSoothe/soothe-community"
-Repository = "https://github.com/OpenSoothe/soothe-community"
-Issues = "https://github.com/OpenSoothe/soothe-community/issues"
-
 keywords = ["soothe", "plugins", "agents", "ai", "llm", "arxiv", "paperscout"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -37,6 +31,11 @@ dependencies = [
     "tiktoken>=0.5.0",
     "feedparser>=6.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/OpenSoothe/soothe-community"
+Repository = "https://github.com/OpenSoothe/soothe-community"
+Issues = "https://github.com/OpenSoothe/soothe-community/issues"
 
 [project.optional-dependencies]
 dev = [
