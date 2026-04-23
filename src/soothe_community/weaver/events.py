@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from pydantic import ConfigDict
 
-from soothe_sdk import SubagentEvent
+from soothe_sdk.events import SubagentEvent
 
 
 class WeaverDispatchedEvent(SubagentEvent):
@@ -166,78 +166,9 @@ class WeaverExecuteCompletedEvent(SubagentEvent):
     model_config = ConfigDict(extra="allow")
 
 
-# Register all weaver events with the plugin-level registry
-from soothe_sdk import register_event, VerbosityTier  # noqa: E402
-
-# Dispatch/Complete events visible at NORMAL
-register_event(
-    WeaverDispatchedEvent,
-    verbosity=VerbosityTier.NORMAL,
-    summary_template="Weaver: {task}",
-)
-register_event(
-    WeaverCompletedEvent,
-    verbosity=VerbosityTier.NORMAL,
-    summary_template="Completed in {duration_ms}ms",
-)
-
-# Internal weaver steps at DETAILED (hidden at normal verbosity)
-register_event(
-    WeaverAnalysisStartedEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    WeaverAnalysisCompletedEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    WeaverReuseHitEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    WeaverReuseMissEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    WeaverSkillifyPendingEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    WeaverHarmonizeStartedEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    WeaverHarmonizeCompletedEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    WeaverGenerateStartedEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    WeaverGenerateCompletedEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    WeaverValidateStartedEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    WeaverValidateCompletedEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    WeaverRegistryUpdatedEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    WeaverExecuteStartedEvent,
-    verbosity=VerbosityTier.NORMAL,  # Execution visible (actual task being run)
-)
-register_event(
-    WeaverExecuteCompletedEvent,
-    verbosity=VerbosityTier.NORMAL,  # Execution result visible
-)
+# Events are self-contained for community plugins.
+# Daemon will handle event registration based on type strings.
+# No explicit registration needed here.
 
 # Event type constants
 SUBAGENT_WEAVER_DISPATCHED = "soothe.subagent.weaver.dispatched"

@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
     from langchain_core.embeddings import Embeddings
 
-    from soothe_sdk import VectorStoreProtocol
+from soothe_sdk.protocols import VectorStoreProtocol
 
     from .models import SkillRecord
     from .warehouse import SkillWarehouse

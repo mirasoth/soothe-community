@@ -65,10 +65,6 @@ WEAVER_DESCRIPTION = (
 )
 
 
-def _emit_progress(event: dict[str, Any]) -> None:
-    from soothe_sdk import emit_progress
-
-    emit_progress(event, logger)
 
 
 class WeaverState(dict):
@@ -93,7 +89,6 @@ def _build_weaver_graph(
     def _check_policy(action: str, tool_name: str, tool_args: dict[str, Any] | None = None) -> None:
         if policy is None:
             return
-        from soothe_sdk import ActionRequest, PermissionSet, PolicyContext
 
         permissions = PermissionSet(frozenset())
         get_profile = getattr(policy, "get_profile", None)
@@ -145,11 +140,11 @@ def _build_weaver_graph(
             last = messages[-1]
             task_text = last.content if hasattr(last, "content") else str(last)
 
-        _emit_progress(WeaverDispatchedEvent(task=task_text[:200]).to_dict())
+        _emit_event(WeaverDispatchedEvent(task=task_text[:200]).to_dict(), logger)
 
-        _emit_progress(WeaverAnalysisStartedEvent(task_preview=task_text[:200]).to_dict())
+        _emit_event(WeaverAnalysisStartedEvent(task_preview=task_text[:200]).to_dict(), logger)
         capability = await analyzer.analyze(task_text)
-        _emit_progress(
+        _emit_event(
             WeaverAnalysisCompletedEvent(
                 capabilities=capability.required_capabilities,
                 constraints=capability.constraints,
@@ -159,7 +154,7 @@ def _build_weaver_graph(
         reuse_candidate = await reuse_index.find_reusable(capability)
 
         if reuse_candidate:
-            _emit_progress(
+            _emit_event(
                 WeaverReuseHitEvent(
                     agent_name=reuse_candidate.manifest.name,
                     confidence=round(reuse_candidate.confidence, 3),
@@ -168,7 +163,7 @@ def _build_weaver_graph(
             return await _execute_existing(reuse_candidate, task_text)
 
         best_conf = 0.0
-        _emit_progress(WeaverReuseMissEvent(best_confidence=round(best_conf, 3)).to_dict())
+        _emit_event(WeaverReuseMissEvent(best_confidence=round(best_conf, 3)).to_dict(), logger)
 
         # Fetch skills (with indexing-not-ready tolerance)
         from soothe_community.skillify.models import SkillBundle
@@ -176,7 +171,7 @@ def _build_weaver_graph(
         skill_bundle = SkillBundle(query=capability.description)
         if skillify_retriever:
             if hasattr(skillify_retriever, "is_ready") and not skillify_retriever.is_ready:
-                _emit_progress(WeaverSkillifyPendingEvent().to_dict())
+                _emit_event(WeaverSkillifyPendingEvent().to_dict(), logger)
                 ready_event = getattr(skillify_retriever, "_ready_event", None)
                 if ready_event is not None:
                     try:
@@ -191,13 +186,13 @@ def _build_weaver_graph(
             except Exception:
                 logger.warning("Skillify retrieval failed", exc_info=True)
 
-        _emit_progress(
+        _emit_event(
             WeaverHarmonizeStartedEvent(
                 skill_count=len(skill_bundle.results),
             ).to_dict()
         )
         blueprint = await composer.compose(capability, skill_bundle)
-        _emit_progress(
+        _emit_event(
             WeaverHarmonizeCompletedEvent(
                 retained=len(blueprint.harmonized.skills),
                 dropped=len(blueprint.harmonized.dropped_skills),
@@ -206,24 +201,24 @@ def _build_weaver_graph(
         )
 
         _check_policy(action="subagent_spawn", tool_name="weaver.generate", tool_args={"goal": capability.description})
-        _emit_progress(WeaverGenerateStartedEvent(agent_name=blueprint.agent_name).to_dict())
+        _emit_event(WeaverGenerateStartedEvent(agent_name=blueprint.agent_name).to_dict(), logger)
         output_dir = registry.base_dir / blueprint.agent_name
         manifest = await generator.generate(blueprint, output_dir)
-        _emit_progress(
+        _emit_event(
             WeaverGenerateCompletedEvent(
                 agent_name=manifest.name,
                 path=str(output_dir),
             ).to_dict()
         )
 
-        _emit_progress(WeaverValidateStartedEvent(agent_name=manifest.name).to_dict())
+        _emit_event(WeaverValidateStartedEvent(agent_name=manifest.name).to_dict(), logger)
         await _validate_package(manifest, output_dir, capability)
-        _emit_progress(WeaverValidateCompletedEvent(agent_name=manifest.name).to_dict())
+        _emit_event(WeaverValidateCompletedEvent(agent_name=manifest.name).to_dict(), logger)
 
         _check_policy(action="subagent_spawn", tool_name="weaver.register", tool_args={"agent_name": manifest.name})
         registry.register(manifest, output_dir)
         await reuse_index.index_agent(manifest, str(output_dir))
-        _emit_progress(
+        _emit_event(
             WeaverRegistryUpdatedEvent(
                 agent_name=manifest.name,
                 version=manifest.version,
@@ -242,7 +237,7 @@ def _build_weaver_graph(
         task: str,
         llm: BaseChatModel,
     ) -> dict[str, Any]:
-        _emit_progress(
+        _emit_event(
             WeaverExecuteStartedEvent(
                 agent_name=manifest.name,
                 task_preview=task[:200],
@@ -288,14 +283,14 @@ def _build_weaver_graph(
             logger.exception("Generated agent execution failed")
             result_text = f"Generated agent '{manifest.name}' encountered an error during execution."
 
-        _emit_progress(
+        _emit_event(
             WeaverExecuteCompletedEvent(
                 agent_name=manifest.name,
                 result_length=len(result_text),
             ).to_dict()
         )
 
-        _emit_progress(
+        _emit_event(
             WeaverCompletedEvent(
                 duration_ms=0,
                 agent_name=manifest.name,
@@ -329,8 +324,8 @@ def _build_weaver_graph(
 
 def _resolve_dependencies(cfg: Any, _collection: str) -> tuple[Any, Any]:
     """Resolve VectorStore and Embeddings for the reuse index."""
-    vs = cfg.create_vector_store_for_role("weaver_reuse")
-    embeddings = cfg.create_embedding_model()
+    vs = soothe_cfg.create_vector_store_for_role("weaver_reuse")
+    embeddings = soothe_cfg.create_embedding_model()
     return vs, embeddings
 
 
@@ -358,7 +353,6 @@ class WeaverPlugin:
 
             context.logger.info("Weaver plugin loaded (Skillify available)")
         except ImportError:
-            from soothe_sdk import PluginError
 
             raise PluginError(
                 "Weaver requires Skillify plugin. Install soothe-community with skillify support.",
@@ -399,28 +393,23 @@ class WeaverPlugin:
         """
         from langchain.chat_models import init_chat_model
 
-        from soothe_sdk import SOOTHE_HOME  # SootheConfig via context.soothe_config
-        # ConfigDrivenPolicy via context.services["policy"]
-
-        cfg: SootheConfig = config if isinstance(config, SootheConfig) else SootheConfig()  # noqa: F821
 
         if model is None:
             msg = "Weaver subagent requires a model."
             raise ValueError(msg)
         if isinstance(model, str):
-            if isinstance(cfg, SootheConfig) and ":" in model:  # noqa: F821
                 provider_name = model.split(":", 1)[0]
-                provider_names = [p.name for p in cfg.providers] if cfg.providers else []
+                provider_names = [p.name for p in soothe_cfg.providers] if soothe_cfg.providers else []
                 if provider_name in provider_names:
                     cache_key = model
-                    if cache_key in cfg._model_cache:
-                        resolved_model = cfg._model_cache[cache_key]
+                    if cache_key in soothe_cfg._model_cache:
+                        resolved_model = soothe_cfg._model_cache[cache_key]
                     else:
                         _, _, model_name = model.partition(":")
-                        provider_type, kwargs = cfg._provider_kwargs(provider_name)
+                        provider_type, kwargs = soothe_cfg._provider_kwargs(provider_name)
                         init_str = f"{provider_type}:{model_name}" if provider_name else model
                         resolved_model: BaseChatModel = init_chat_model(init_str, **kwargs)
-                        cfg._model_cache[cache_key] = resolved_model
+                        soothe_cfg._model_cache[cache_key] = resolved_model
                 else:
                     model_kwargs: dict[str, Any] = {}
                     base_url = os.environ.get("OPENAI_BASE_URL")
@@ -438,17 +427,17 @@ class WeaverPlugin:
         else:
             resolved_model = model
 
-        weaver_cfg = cfg.weaver if hasattr(cfg, "weaver") else None
-        generated_agents_dir = getattr(weaver_cfg, "generated_agents_dir", "") or str(
-            Path(SOOTHE_HOME) / "generated_agents"
+        weaver_cfg = plugin_cfg.get("weaver", {}) else None
+        generated_agents_dir = plugin_cfg.get("weaver", {}).get( "generated_agents_dir", "") or str(
+            Path.home() / ".soothe" / "generated_agents"
         )
-        reuse_threshold = getattr(weaver_cfg, "reuse_threshold", 0.85) if weaver_cfg else 0.85
+        reuse_threshold = plugin_cfg.get("weaver", {}).get( "reuse_threshold", 0.85) if weaver_cfg else 0.85
         reuse_collection = (
-            getattr(weaver_cfg, "reuse_collection", "soothe_weaver_reuse") if weaver_cfg else "soothe_weaver_reuse"
+            plugin_cfg.get("weaver", {}).get( "reuse_collection", "soothe_weaver_reuse") if weaver_cfg else "soothe_weaver_reuse"
         )
-        allowed_tools = getattr(weaver_cfg, "allowed_tool_groups", []) if weaver_cfg else []
+        allowed_tools = plugin_cfg.get("weaver", {}).get( "allowed_tool_groups", []) if weaver_cfg else []
 
-        vector_store, embeddings = _resolve_dependencies(cfg, reuse_collection)
+        vector_store, embeddings = _resolve_dependencies(soothe_cfg, reuse_collection)
 
         analyzer_inst = RequirementAnalyzer(model=resolved_model)
         self._reuse_index = ReuseIndex(
@@ -456,7 +445,7 @@ class WeaverPlugin:
             embeddings=embeddings,
             threshold=reuse_threshold,
             collection=reuse_collection,
-            embedding_dims=cfg.embedding_dims,
+            embedding_dims=plugin_cfg.get("embedding_dims", 1536),
         )
         composer_inst = AgentComposer(
             model=resolved_model,
@@ -467,13 +456,13 @@ class WeaverPlugin:
 
         # Try to create skillify retriever from plugin config
         skillify_retriever = None
-        skillify_cfg = cfg.skillify if hasattr(cfg, "skillify") else None
-        if skillify_cfg and getattr(skillify_cfg, "enabled", False):
+        skillify_cfg = plugin_cfg.get("skillify", {}) else None
+        if skillify_cfg and plugin_cfg.get("skillify", {}).get( "enabled", False):
             try:
                 from soothe_community.skillify.retriever import SkillRetriever
 
-                vs = cfg.create_vector_store_for_role("skillify")
-                skill_embeddings = cfg.create_embedding_model()
+                vs = soothe_cfg.create_vector_store_for_role("skillify")
+                skill_embeddings = soothe_cfg.create_embedding_model()
                 skillify_retriever = SkillRetriever(vector_store=vs, embeddings=skill_embeddings)
             except Exception:
                 logger.debug("Failed to create Skillify retriever for Weaver", exc_info=True)
@@ -486,8 +475,6 @@ class WeaverPlugin:
             registry=registry_inst,
             skillify_retriever=skillify_retriever,
             model=resolved_model,
-            policy=ConfigDrivenPolicy(),  # noqa: F821
-            policy_profile=cfg.protocols.policy.profile,
         )
 
         spec: CompiledSubAgent = {

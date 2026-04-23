@@ -47,10 +47,14 @@ SKILLIFY_DESCRIPTION = (
 )
 
 
-def _emit_progress(event: dict[str, Any]) -> None:
-    from soothe_sdk import emit_progress
+def _emit_event(event_dict: dict[str, Any], ctx_logger: logging.Logger) -> None:
+    """Emit progress event via logger or event emission.
 
-    emit_progress(event, logger)
+    For community plugins, we use logger.info() for visibility.
+    Daemon may intercept and convert to progress events.
+    """
+    event_type = event_dict.get("type", "unknown")
+    ctx_logger.info(f"[{event_type}] {event_dict}")
 
 
 class SkillifyState(dict):
@@ -73,27 +77,28 @@ def _build_skillify_graph(retriever: SkillRetriever) -> Any:
             last = messages[-1]
             query = last.content if hasattr(last, "content") else str(last)
 
-        _emit_progress(SkillifyDispatchedEvent(task=query[:200]).to_dict())
+        _emit_event(SkillifyDispatchedEvent(task=query[:200]).to_dict(), logger)
 
         if not retriever.is_ready:
-            _emit_progress(SkillifyIndexingPendingEvent(query=query[:200]).to_dict())
+            _emit_event(SkillifyIndexingPendingEvent(query=query[:200]).to_dict(), logger)
 
-        _emit_progress(SkillifyRetrieveStartedEvent(query=query[:200]).to_dict())
+        _emit_event(SkillifyRetrieveStartedEvent(query=query[:200]).to_dict(), logger)
 
         bundle: SkillBundle = await retriever.retrieve(query)
 
         if bundle.query.startswith("[Indexing in progress]"):
-            _emit_progress(SkillifyRetrieveNotReadyEvent(message=bundle.query).to_dict())
-            _emit_progress(SkillifyCompletedEvent(duration_ms=0, result_count=0).to_dict())
+            _emit_event(SkillifyRetrieveNotReadyEvent(message=bundle.query).to_dict(), logger)
+            _emit_event(SkillifyCompletedEvent(duration_ms=0, result_count=0).to_dict(), logger)
             return {"messages": [AIMessage(content=bundle.query)]}
 
         top_score = bundle.results[0].score if bundle.results else 0.0
-        _emit_progress(
+        _emit_event(
             SkillifyRetrieveCompletedEvent(
                 query=query[:200],
                 result_count=len(bundle.results),
                 top_score=round(top_score, 3),
-            ).to_dict()
+            ).to_dict(),
+            logger
         )
 
         result_lines = [f"Found {len(bundle.results)} relevant skills (total indexed: {bundle.total_indexed}):\n"]
@@ -106,11 +111,12 @@ def _build_skillify_graph(retriever: SkillRetriever) -> Any:
             )
 
         result_text = "\n".join(result_lines)
-        _emit_progress(
+        _emit_event(
             SkillifyCompletedEvent(
                 duration_ms=0,
                 result_count=len(bundle.results),
-            ).to_dict()
+            ).to_dict(),
+            logger
         )
         return {"messages": [AIMessage(content=result_text)]}
 
@@ -137,11 +143,25 @@ def _build_skillify_graph(retriever: SkillRetriever) -> Any:
     return graph.compile()
 
 
-def _resolve_dependencies(cfg: Any, _skillify_cfg: Any) -> tuple[Any, Any]:
-    """Resolve VectorStore and Embeddings from config."""
-    vs = cfg.create_vector_store_for_role("skillify")
-    embeddings_factory = cfg.create_embedding_model
-    return vs, embeddings_factory
+def _resolve_dependencies(soothe_cfg: Any) -> tuple[Any, Any]:
+    """Resolve VectorStore and Embeddings from context services."""
+    # Use context services if available
+    if hasattr(soothe_cfg, 'services'):
+        services = soothe_cfg.services
+        vector_store = services.get("vector_store")
+        embeddings_factory = services.get("embeddings_factory")
+        if vector_store and embeddings_factory:
+            return vector_store, embeddings_factory
+
+    # Fallback: use soothe_config protocol methods
+    if hasattr(soothe_cfg, 'create_vector_store_for_role'):
+        vs = soothe_cfg.create_vector_store_for_role("skillify")
+        embeddings_factory = soothe_cfg.create_embedding_model
+        return vs, embeddings_factory
+
+    # Last resort: create basic implementations
+    msg = "Cannot resolve vector_store or embeddings from context or config"
+    raise ValueError(msg)
 
 
 def _start_background_indexer(indexer: SkillIndexer) -> None:
@@ -196,31 +216,50 @@ class SkillifyPlugin:
 
         Args:
             model: Unused (Skillify does not need an LLM).
-            config: SootheConfig instance.
-            context: Plugin context.
+            config: Plugin context (PluginContext instance from soothe_sdk).
+            context: Plugin context (same as config parameter - deprecated parameter name).
             **_kwargs: Additional config (ignored).
 
         Returns:
             CompiledSubAgent dict with background indexer.
         """
-        from soothe_sdk import SOOTHE_HOME  # SootheConfig via context.soothe_config
-        # ConfigDrivenPolicy via context.services["policy"]
 
-        cfg: SootheConfig = config if isinstance(config, SootheConfig) else SootheConfig()  # noqa: F821
+        soothe_cfg = ctx.soothe_config
+        plugin_cfg = ctx.config if hasattr(ctx, 'config') else {}
+        ctx_logger = ctx.logger if hasattr(ctx, 'logger') else logger
 
-        default_warehouse = str(Path(SOOTHE_HOME) / "agents" / "skillify" / "warehouse")
-        warehouse_paths = list(cfg.skillify.warehouse_paths) if hasattr(cfg, "skillify") else []
-        if default_warehouse not in warehouse_paths:
+        # Get plugin-specific config
+        skillify_cfg = plugin_cfg.get("skillify", {})
+
+        # Resolve warehouse paths
+        soothe_home = Path.home() / ".soothe"  # Default SOOTHE_HOME
+        if hasattr(soothe_cfg, 'home'):
+            soothe_home = Path(soothe_cfg.home)
+
+        default_warehouse = str(soothe_home / "agents" / "skillify" / "warehouse")
+        warehouse_paths = skillify_cfg.get("warehouse_paths", [])
+        if isinstance(warehouse_paths, list) and default_warehouse not in warehouse_paths:
             warehouse_paths.insert(0, default_warehouse)
 
-        skillify_cfg = cfg.skillify if hasattr(cfg, "skillify") else None
-
         warehouse = SkillWarehouse(paths=warehouse_paths)
-        vector_store, embeddings = _resolve_dependencies(cfg, skillify_cfg)
+        vector_store, embeddings = _resolve_dependencies(soothe_cfg)
 
-        collection = getattr(skillify_cfg, "index_collection", "soothe_skillify") if skillify_cfg else "soothe_skillify"
-        interval = getattr(skillify_cfg, "index_interval_seconds", 300) if skillify_cfg else 300
-        top_k = getattr(skillify_cfg, "retrieval_top_k", 10) if skillify_cfg else 10
+        # Extract config parameters with defaults
+        collection = skillify_cfg.get("index_collection", "soothe_skillify")
+        interval = skillify_cfg.get("index_interval_seconds", 300)
+        top_k = skillify_cfg.get("retrieval_top_k", 10)
+        embedding_dims = skillify_cfg.get("embedding_dims", 1536)
+
+        # Get policy from services
+        policy = None
+        policy_profile = "standard"
+        if hasattr(ctx, 'services'):
+            services = ctx.services
+            policy = services.get("policy")
+            policy_profile = services.get("policy_profile", "standard")
+
+        def emit_callback(event: dict[str, Any]) -> None:
+            _emit_event(event, ctx_logger)
 
         self._indexer = SkillIndexer(
             warehouse=warehouse,
@@ -228,8 +267,8 @@ class SkillifyPlugin:
             embeddings=embeddings,
             interval_seconds=interval,
             collection=collection,
-            embedding_dims=cfg.embedding_dims,
-            event_callback=_emit_progress,
+            embedding_dims=embedding_dims,
+            event_callback=emit_callback,
         )
 
         retriever = SkillRetriever(
@@ -237,8 +276,6 @@ class SkillifyPlugin:
             embeddings=embeddings,
             top_k=top_k,
             ready_event=self._indexer.ready_event,
-            policy=ConfigDrivenPolicy(),  # noqa: F821
-            policy_profile=cfg.protocols.policy.profile,
         )
 
         _start_background_indexer(self._indexer)

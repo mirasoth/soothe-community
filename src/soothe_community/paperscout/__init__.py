@@ -109,7 +109,7 @@ class PaperScoutPlugin:
             missing_deps.append("scikit-learn>=1.0.0")
 
         if missing_deps:
-            from soothe_sdk import PluginError
+            from soothe_sdk.exceptions import PluginError
 
             msg = (
                 f"Missing required dependencies: {', '.join(missing_deps)}. "
@@ -159,11 +159,18 @@ class PaperScoutPlugin:
             # Use default configuration
             paperscout_config = PaperScoutConfig()
 
-        # Get persistence store from context services (daemon injects this)
-        store = context.services.get("persistence")
+        # Get persistence store from context services
+        store = kwargs.get("store")
+        if not store and hasattr(config, 'services'):
+            store = config.services.get("persistence")
         if not store:
-            context.logger.warning("No persistence service available, using kwargs store")
-            store = kwargs.get("store")
+            if hasattr(config, 'soothe_config'):
+                soothe_cfg = config.soothe_config
+                if hasattr(soothe_cfg, 'services'):
+                    store = soothe_cfg.services.get("persistence")
+            if not store:
+                msg = "PaperScout requires persistence store from context.services"
+                raise ValueError(msg)
 
         # Get user ID
         user_id = kwargs.get("user_id", "default")

@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import ConfigDict
 
-from soothe_sdk import SubagentEvent
+from soothe_sdk.events import SubagentEvent
 
 
 class SkillifyDispatchedEvent(SubagentEvent):
@@ -108,54 +108,9 @@ class SkillifyIndexFailedEvent(SubagentEvent):
     model_config = ConfigDict(extra="allow")
 
 
-# Register all skillify events with the plugin-level registry
-from soothe_sdk import register_event, VerbosityTier  # noqa: E402
-
-# Dispatch/Complete events visible at NORMAL
-register_event(
-    SkillifyDispatchedEvent,
-    verbosity=VerbosityTier.NORMAL,
-    summary_template="Skillify: {task}",
-)
-register_event(
-    SkillifyCompletedEvent,
-    verbosity=VerbosityTier.NORMAL,
-    summary_template="Completed in {duration_ms}ms ({result_count} results)",
-)
-
-# Internal skillify steps at DETAILED (hidden at normal verbosity)
-register_event(
-    SkillifyIndexingPendingEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    SkillifyRetrieveStartedEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    SkillifyRetrieveCompletedEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    SkillifyRetrieveNotReadyEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    SkillifyIndexStartedEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    SkillifyIndexUpdatedEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    SkillifyIndexUnchangedEvent,
-    verbosity=VerbosityTier.DETAILED,
-)
-register_event(
-    SkillifyIndexFailedEvent,
-    verbosity=VerbosityTier.NORMAL,  # Failures visible for debugging
-)
+# Events are self-contained for community plugins.
+# Daemon will handle event registration based on type strings.
+# No explicit registration needed here.
 
 # Event type constants for convenient imports
 SUBAGENT_SKILLIFY_DISPATCHED = "soothe.subagent.skillify.dispatched"

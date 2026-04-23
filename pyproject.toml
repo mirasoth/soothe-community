@@ -21,7 +21,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "soothe-sdk>=0.2.0,<1.0.0",
+    "soothe-sdk>=0.3.8",
     "langgraph>=0.2.0",
     "arxiv>=2.0.0",
     "sentence-transformers>=2.2.0",
