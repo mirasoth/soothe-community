@@ -47,6 +47,7 @@ dev = [
 
 [project.entry-points."soothe.plugins"]
 paperscout = "soothe_community.paperscout:PaperScoutPlugin"
+sample_echo = "soothe_community.sample_echo:SampleEchoPlugin"
 skillify = "soothe_community.skillify:SkillifyPlugin"
 weaver = "soothe_community.weaver:WeaverPlugin"
 
