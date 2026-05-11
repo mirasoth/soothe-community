@@ -10,7 +10,9 @@ from typing import Literal
 
 from pydantic import ConfigDict
 
-from soothe_sdk import SubagentEvent, VerbosityTier, register_event
+from soothe_sdk.core.events import SubagentEvent
+from soothe_sdk.core.verbosity import VerbosityTier
+from soothe_sdk.plugin.registry import register_event
 
 
 class PaperScoutStepEvent(SubagentEvent):
@@ -79,8 +81,8 @@ register_event(
 
 # Event type constants for convenient imports
 PAPERSCOUT_STEP = "soothe.community.paperscout.step"
-PAPERSCOUT_PAPER_FOUND = "soothe.community.paperscout.paper_found"
-PAPERSCOUT_EMAIL_SENT = "soothe.community.paperscout.email_sent"
+PAPERSCOUT_PAPER_FOUND = "soothe.community.paperscout.paper.found"
+PAPERSCOUT_EMAIL_SENT = "soothe.community.paperscout.email.sent"
 PAPERSCOUT_ERROR = "soothe.community.paperscout.error"
 
 __all__ = [

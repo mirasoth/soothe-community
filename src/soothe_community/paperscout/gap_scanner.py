@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from soothe_sdk import PersistStore
+    from soothe_sdk.protocols import AsyncPersistStore
     from soothe_community.paperscout.state import PaperScoutConfig
 
 logger = logging.getLogger(__name__)
@@ -26,14 +26,14 @@ class GapScanner:
 
     def __init__(
         self,
-        store: PersistStore,
+        store: AsyncPersistStore,
         user_id: str,
         big_bang: date | None = None,
     ):
         """Initialize gap scanner.
 
         Args:
-            store: PersistStore for notification records.
+            store: Async persistence backend for notification records.
             user_id: User identifier for storage keys.
             big_bang: Earliest valid notification date (optional).
         """
@@ -41,7 +41,7 @@ class GapScanner:
         self._user_id = user_id
         self._big_bang = big_bang
 
-    def scan(self, window_days: int = 7) -> list[date]:
+    async def scan(self, window_days: int = 7) -> list[date]:
         """Find dates with missing notifications within the window.
 
         Args:
@@ -64,7 +64,7 @@ class GapScanner:
         missing = []
         for check_date in all_dates:
             key = f"paperscout:notifications:{self._user_id}:{check_date.isoformat()}"
-            record = self._store.get(key)
+            record = await self._store.load(key)
             if not record:
                 missing.append(check_date)
 
@@ -89,7 +89,7 @@ class GapScanner:
         Returns:
             Dict mapping dates to status strings.
         """
-        missing = self.scan(config.gap_window_days)
+        missing = await self.scan(config.gap_window_days)
         results: dict[date, str] = {}
 
         if not missing:

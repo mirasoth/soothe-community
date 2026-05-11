@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import ConfigDict
 
-from soothe_sdk.events import SubagentEvent
+from soothe_sdk.core.events import SubagentEvent
 
 
 class SkillifyDispatchedEvent(SubagentEvent):

@@ -21,8 +21,8 @@ if TYPE_CHECKING:
 
 from soothe_sdk.protocols import VectorStoreProtocol
 
-    from .models import SkillRecord
-    from .warehouse import SkillWarehouse
+from .models import SkillRecord
+from .warehouse import SkillWarehouse
 
 logger = logging.getLogger(__name__)
 

@@ -36,10 +36,15 @@ def sample_zotero_paper():
 
 @pytest.fixture
 def mock_persist_store():
-    """Mock PersistStore for testing."""
+    """Mock AsyncPersistStore for testing."""
+    from unittest.mock import AsyncMock
+
     store = MagicMock()
-    store.get.return_value = None
-    store.set.return_value = None
+    store.load = AsyncMock(return_value=None)
+    store.save = AsyncMock(return_value=None)
+    store.delete = AsyncMock(return_value=None)
+    store.list_keys = AsyncMock(return_value=[])
+    store.close = AsyncMock(return_value=None)
     return store
 
 

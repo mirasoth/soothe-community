@@ -16,7 +16,9 @@ from typing import TYPE_CHECKING, Annotated, Any
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
-from soothe_sdk import plugin, subagent
+from soothe_sdk.core.exceptions import PluginError
+from soothe_sdk.plugin import plugin, subagent
+from soothe_sdk.protocols import ActionRequest, PermissionSet, PolicyContext
 
 from .analyzer import RequirementAnalyzer
 from .composer import AgentComposer
@@ -324,8 +326,8 @@ def _build_weaver_graph(
 
 def _resolve_dependencies(cfg: Any, _collection: str) -> tuple[Any, Any]:
     """Resolve VectorStore and Embeddings for the reuse index."""
-    vs = soothe_cfg.create_vector_store_for_role("weaver_reuse")
-    embeddings = soothe_cfg.create_embedding_model()
+    vs = cfg.create_vector_store_for_role("weaver_reuse")
+    embeddings = cfg.create_embedding_model()
     return vs, embeddings
 
 
@@ -353,10 +355,8 @@ class WeaverPlugin:
 
             context.logger.info("Weaver plugin loaded (Skillify available)")
         except ImportError:
-
             raise PluginError(
                 "Weaver requires Skillify plugin. Install soothe-community with skillify support.",
-                plugin_name="weaver",
             )
 
     async def on_unload(self) -> None:
@@ -393,51 +393,50 @@ class WeaverPlugin:
         """
         from langchain.chat_models import init_chat_model
 
+        soothe_cfg = context.soothe_config
+        plugin_cfg = context.config if hasattr(context, "config") and context.config is not None else {}
+        if not isinstance(plugin_cfg, dict):
+            plugin_cfg = {}
 
         if model is None:
             msg = "Weaver subagent requires a model."
             raise ValueError(msg)
+
+        resolved_model: BaseChatModel
         if isinstance(model, str):
-                provider_name = model.split(":", 1)[0]
-                provider_names = [p.name for p in soothe_cfg.providers] if soothe_cfg.providers else []
-                if provider_name in provider_names:
-                    cache_key = model
-                    if cache_key in soothe_cfg._model_cache:
-                        resolved_model = soothe_cfg._model_cache[cache_key]
-                    else:
-                        _, _, model_name = model.partition(":")
-                        provider_type, kwargs = soothe_cfg._provider_kwargs(provider_name)
-                        init_str = f"{provider_type}:{model_name}" if provider_name else model
-                        resolved_model: BaseChatModel = init_chat_model(init_str, **kwargs)
-                        soothe_cfg._model_cache[cache_key] = resolved_model
+            provider_name = model.split(":", 1)[0]
+            provider_names = [p.name for p in soothe_cfg.providers] if soothe_cfg.providers else []
+            if provider_name in provider_names:
+                cache_key = model
+                if cache_key in soothe_cfg._model_cache:
+                    resolved_model = soothe_cfg._model_cache[cache_key]
                 else:
-                    model_kwargs: dict[str, Any] = {}
-                    base_url = os.environ.get("OPENAI_BASE_URL")
-                    if base_url:
-                        model_kwargs["base_url"] = base_url
-                        model_kwargs["use_responses_api"] = False
-                    resolved_model: BaseChatModel = init_chat_model(model, **model_kwargs)
+                    _, _, model_name = model.partition(":")
+                    provider_type, kwargs = soothe_cfg._provider_kwargs(provider_name)
+                    init_str = f"{provider_type}:{model_name}" if provider_name else model
+                    resolved_model = init_chat_model(init_str, **kwargs)
+                    soothe_cfg._model_cache[cache_key] = resolved_model
             else:
                 model_kwargs: dict[str, Any] = {}
                 base_url = os.environ.get("OPENAI_BASE_URL")
                 if base_url:
                     model_kwargs["base_url"] = base_url
                     model_kwargs["use_responses_api"] = False
-                resolved_model: BaseChatModel = init_chat_model(model, **model_kwargs)
+                resolved_model = init_chat_model(model, **model_kwargs)
         else:
             resolved_model = model
 
-        weaver_cfg = plugin_cfg.get("weaver", {}) else None
-        generated_agents_dir = plugin_cfg.get("weaver", {}).get( "generated_agents_dir", "") or str(
+        weaver_cfg = plugin_cfg.get("weaver") or {}
+        generated_agents_dir = weaver_cfg.get("generated_agents_dir") or str(
             Path.home() / ".soothe" / "generated_agents"
         )
-        reuse_threshold = plugin_cfg.get("weaver", {}).get( "reuse_threshold", 0.85) if weaver_cfg else 0.85
-        reuse_collection = (
-            plugin_cfg.get("weaver", {}).get( "reuse_collection", "soothe_weaver_reuse") if weaver_cfg else "soothe_weaver_reuse"
-        )
-        allowed_tools = plugin_cfg.get("weaver", {}).get( "allowed_tool_groups", []) if weaver_cfg else []
+        reuse_threshold = float(weaver_cfg.get("reuse_threshold", 0.85))
+        reuse_collection = weaver_cfg.get("reuse_collection", "soothe_weaver_reuse")
+        allowed_tools = weaver_cfg.get("allowed_tool_groups", [])
 
         vector_store, embeddings = _resolve_dependencies(soothe_cfg, reuse_collection)
+
+        embedding_dims = int(weaver_cfg.get("embedding_dims", plugin_cfg.get("embedding_dims", 1536)))
 
         analyzer_inst = RequirementAnalyzer(model=resolved_model)
         self._reuse_index = ReuseIndex(
@@ -445,7 +444,7 @@ class WeaverPlugin:
             embeddings=embeddings,
             threshold=reuse_threshold,
             collection=reuse_collection,
-            embedding_dims=plugin_cfg.get("embedding_dims", 1536),
+            embedding_dims=embedding_dims,
         )
         composer_inst = AgentComposer(
             model=resolved_model,
@@ -456,8 +455,8 @@ class WeaverPlugin:
 
         # Try to create skillify retriever from plugin config
         skillify_retriever = None
-        skillify_cfg = plugin_cfg.get("skillify", {}) else None
-        if skillify_cfg and plugin_cfg.get("skillify", {}).get( "enabled", False):
+        skillify_cfg = plugin_cfg.get("skillify") or {}
+        if skillify_cfg.get("enabled", False):
             try:
                 from soothe_community.skillify.retriever import SkillRetriever
 

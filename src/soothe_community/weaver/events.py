@@ -6,12 +6,11 @@ Events are self-registered at module load time.
 
 from __future__ import annotations
 
-from dataclasses import field
 from typing import Any, Literal
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
-from soothe_sdk.events import SubagentEvent
+from soothe_sdk.core.events import SubagentEvent
 
 
 class WeaverDispatchedEvent(SubagentEvent):
@@ -46,8 +45,8 @@ class WeaverAnalysisCompletedEvent(SubagentEvent):
     """Weaver analysis completed event."""
 
     type: Literal["soothe.subagent.weaver.analysis_completed"] = "soothe.subagent.weaver.analysis_completed"
-    capabilities: list[Any] = field(default_factory=list)
-    constraints: list[Any] = field(default_factory=list)
+    capabilities: list[Any] = Field(default_factory=list)
+    constraints: list[Any] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="allow")
 

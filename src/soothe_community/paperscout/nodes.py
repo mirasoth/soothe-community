@@ -3,7 +3,7 @@
 Implements a 5-node workflow:
 profile_analysis → data_collection → relevance_assessment → content_generation → communication
 
-Each node uses Soothe's PersistStore for state persistence and emits events for observability.
+Nodes that touch storage use ``AsyncPersistStore`` (async ``load`` / ``save``).
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from typing import Any
 import arxiv
 from pyzotero import zotero
 
-from soothe_sdk import PersistStore
+from soothe_sdk.protocols import AsyncPersistStore
 from soothe_community.paperscout.email import construct_email_content, send_email
 from soothe_community.paperscout.events import (
     PaperScoutEmailSentEvent,
@@ -29,6 +29,17 @@ from soothe_community.paperscout.reranker import PaperReranker
 from soothe_community.paperscout.state import AgentState
 
 logger = logging.getLogger(__name__)
+
+
+def _arxiv_ids_from_store(raw: Any) -> set[str]:
+    """Normalise stored emailed-paper ids to a set of strings."""
+    if raw is None:
+        return set()
+    if isinstance(raw, set):
+        return {str(x) for x in raw}
+    if isinstance(raw, list):
+        return {str(x) for x in raw}
+    return set()
 
 
 def _emit_step_event(step: str, status: str) -> None:
@@ -60,11 +71,11 @@ def _emit_email_sent_event(recipient: str, papers_count: int) -> None:
     logger.info(f"Email sent to {recipient} with {papers_count} papers")
 
 
-def make_nodes(store: PersistStore, user_id: str) -> dict[str, Callable]:
+def make_nodes(store: AsyncPersistStore, user_id: str) -> dict[str, Callable]:
     """Create node functions with injected storage and user_id.
 
     Args:
-        store: PersistStore for caching and state.
+        store: Async persistence for caching and state.
         user_id: User identifier for storage keys.
 
     Returns:
@@ -103,7 +114,7 @@ def make_nodes(store: PersistStore, user_id: str) -> dict[str, Callable]:
         state["info"].append("Profile validated successfully")
         return {"info": state["info"]}
 
-    def data_collection_node(state: AgentState) -> dict[str, Any]:
+    async def data_collection_node(state: AgentState) -> dict[str, Any]:
         """Collect papers from ArXiv and Zotero."""
         _emit_step_event("data_collection", "Fetching papers")
 
@@ -144,7 +155,7 @@ def make_nodes(store: PersistStore, user_id: str) -> dict[str, Callable]:
 
             # Check for already emailed papers
             emailed_key = f"paperscout:emailed:{user_id}"
-            emailed_papers = store.get(emailed_key) or set()
+            emailed_papers = _arxiv_ids_from_store(await store.load(emailed_key))
             new_papers = [p for p in arxiv_papers if p.arxiv_id not in emailed_papers]
 
             _emit_step_event(
@@ -166,7 +177,7 @@ def make_nodes(store: PersistStore, user_id: str) -> dict[str, Callable]:
 
                     # Try to get cached corpus first
                     cache_key = f"paperscout:zotero:{user_id}"
-                    cached = store.get(cache_key)
+                    cached = await store.load(cache_key)
 
                     if (
                         cached and (datetime.now() - cached.get("timestamp", datetime.min)).total_seconds() < 86400
@@ -193,7 +204,7 @@ def make_nodes(store: PersistStore, user_id: str) -> dict[str, Callable]:
                             zotero_papers.append(paper)
 
                         # Cache for 24 hours
-                        store.set(
+                        await store.save(
                             cache_key,
                             {
                                 "papers": [p.model_dump() for p in zotero_papers],
@@ -312,7 +323,7 @@ def make_nodes(store: PersistStore, user_id: str) -> dict[str, Callable]:
             state["errors"].append(str(e))
             return {"errors": state["errors"]}
 
-    def communication_node(state: AgentState) -> dict[str, Any]:
+    async def communication_node(state: AgentState) -> dict[str, Any]:
         """Send email notification."""
         _emit_step_event("communication", "Sending notification")
 
@@ -344,7 +355,7 @@ def make_nodes(store: PersistStore, user_id: str) -> dict[str, Callable]:
 
                 # Record notification
                 notification_key = f"paperscout:notifications:{user_id}:{date.today().isoformat()}"
-                store.set(
+                await store.save(
                     notification_key,
                     {
                         "date": date.today().isoformat(),
@@ -357,10 +368,10 @@ def make_nodes(store: PersistStore, user_id: str) -> dict[str, Callable]:
 
                 # Mark papers as emailed
                 emailed_key = f"paperscout:emailed:{user_id}"
-                emailed_papers = store.get(emailed_key) or set()
+                emailed_papers = _arxiv_ids_from_store(await store.load(emailed_key))
                 for paper in email_content.papers:
                     emailed_papers.add(paper.arxiv_id)
-                store.set(emailed_key, emailed_papers)
+                await store.save(emailed_key, list(emailed_papers))
 
                 state["info"].append(f"Email sent to {recipient} with {len(email_content.papers)} papers")
                 return {"info": state["info"]}

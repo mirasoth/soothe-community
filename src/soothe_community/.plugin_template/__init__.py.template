@@ -23,7 +23,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe_sdk import plugin, subagent, tool
+from soothe_sdk.core.exceptions import PluginError
+from soothe_sdk.plugin import plugin, subagent, tool
 
 __all__ = [
     "YourPlugin",
@@ -70,13 +71,11 @@ class YourPlugin:
             missing_deps.append("required-package>=1.0.0")
 
         if missing_deps:
-            from soothe.plugin.exceptions import PluginError
-
             msg = (
                 f"Missing required dependencies: {', '.join(missing_deps)}. "
                 "Install with: pip install soothe-community"
             )
-            raise PluginError(msg, plugin_name="your_plugin")
+            raise PluginError(msg)
 
         context.logger.info("your_plugin loaded successfully")
 
@@ -87,7 +86,6 @@ class YourPlugin:
             "This helps the orchestrator decide when to invoke your subagent."
         ),
         model="openai:gpt-4o-mini",
-        display_name="YourAgent",  # Custom display name (optional)
     )
     async def create_subagent(
         self,
@@ -120,12 +118,13 @@ class YourPlugin:
         if not plugin_config:
             plugin_config = YourConfig()
 
-        # Get persistence store
+        # AsyncPersistStore from plugin context (daemon injects persistence)
         store = kwargs.get("store")
+        if not store and hasattr(config, "services"):
+            store = config.services.get("persistence")
         if not store:
-            from soothe.backends.persistence import get_persistence_backend
-
-            store = get_persistence_backend(config)
+            msg = "your_agent requires AsyncPersistStore (e.g. kwargs['store'] or config.services)"
+            raise ValueError(msg)
 
         user_id = kwargs.get("user_id", "default")
 
@@ -145,7 +144,6 @@ class YourPlugin:
     @tool(
         name="your_tool",
         description="Brief description of what your tool does",
-        display_name="YourTool",  # Custom display name (optional)
     )
     def your_tool(self, arg: str) -> str:
         """Your tool implementation.

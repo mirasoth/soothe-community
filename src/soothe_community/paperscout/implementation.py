@@ -15,7 +15,7 @@ from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 
-from soothe_sdk import PersistStore
+from soothe_sdk.protocols import AsyncPersistStore
 from soothe_community.paperscout.nodes import make_nodes
 from soothe_community.paperscout.state import AgentState, PaperScoutConfig
 
@@ -23,17 +23,17 @@ logger = logging.getLogger(__name__)
 
 
 def create_paperscout_graph(
-    store: PersistStore,
+    store: AsyncPersistStore,
     user_id: str,
 ) -> StateGraph:
     """Create the PaperScout workflow graph.
 
     Args:
-        store: PersistStore for state persistence.
+        store: Async key-value persistence backend.
         user_id: User identifier for storage keys.
 
     Returns:
-        Compiled LangGraph StateGraph.
+        LangGraph ``StateGraph`` (compile before execution).
     """
     # Create nodes
     nodes = make_nodes(store, user_id)
@@ -61,14 +61,14 @@ def create_paperscout_graph(
 
 def create_paperscout_subagent(
     config: PaperScoutConfig,
-    store: PersistStore,
+    store: AsyncPersistStore,
     user_id: str = "default",
 ) -> dict[str, Any]:
     """Create a PaperScout subagent.
 
     Args:
         config: PaperScout configuration.
-        store: PersistStore for state persistence.
+        store: Async key-value persistence backend.
         user_id: User identifier for storage keys.
 
     Returns:

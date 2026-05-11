@@ -36,7 +36,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe_sdk import plugin, subagent
+from soothe_sdk.plugin import plugin, subagent
 
 from .implementation import create_paperscout_subagent
 from .state import PaperScoutConfig
@@ -109,13 +109,13 @@ class PaperScoutPlugin:
             missing_deps.append("scikit-learn>=1.0.0")
 
         if missing_deps:
-            from soothe_sdk.exceptions import PluginError
+            from soothe_sdk.core.exceptions import PluginError
 
             msg = (
                 f"Missing required dependencies: {', '.join(missing_deps)}. "
                 "Install with: pip install soothe[paperscout]"
             )
-            raise PluginError(msg, plugin_name="paperscout")
+            raise PluginError(msg)
 
         context.logger.info("PaperScout plugin loaded successfully")
 
@@ -128,7 +128,6 @@ class PaperScoutPlugin:
             "and automated literature monitoring."
         ),
         model="openai:gpt-4o-mini",  # For TLDR generation
-        display_name="PaperScout",  # Custom display name
     )
     async def create_paperscout(
         self,
@@ -169,7 +168,7 @@ class PaperScoutPlugin:
                 if hasattr(soothe_cfg, 'services'):
                     store = soothe_cfg.services.get("persistence")
             if not store:
-                msg = "PaperScout requires persistence store from context.services"
+                msg = "PaperScout requires AsyncPersistStore (e.g. kwargs['store'] or context services)"
                 raise ValueError(msg)
 
         # Get user ID

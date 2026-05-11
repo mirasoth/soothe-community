@@ -1,6 +1,6 @@
 """Tests for PaperScout event system."""
 
-from soothe_sdk.events_registry import get_plugin_events
+from soothe_sdk.plugin.registry import get_plugin_events
 from soothe_community.paperscout.events import (
     PAPERSCOUT_EMAIL_SENT,
     PAPERSCOUT_ERROR,

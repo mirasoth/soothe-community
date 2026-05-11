@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
-from soothe_sdk import plugin, subagent
+from soothe_sdk.plugin import plugin, subagent
 
 from .events import (
     SkillifyCompletedEvent,
@@ -224,9 +224,9 @@ class SkillifyPlugin:
             CompiledSubAgent dict with background indexer.
         """
 
-        soothe_cfg = ctx.soothe_config
-        plugin_cfg = ctx.config if hasattr(ctx, 'config') else {}
-        ctx_logger = ctx.logger if hasattr(ctx, 'logger') else logger
+        soothe_cfg = context.soothe_config
+        plugin_cfg = context.config if hasattr(context, "config") else {}
+        ctx_logger = context.logger if hasattr(context, "logger") else logger
 
         # Get plugin-specific config
         skillify_cfg = plugin_cfg.get("skillify", {})
@@ -253,8 +253,8 @@ class SkillifyPlugin:
         # Get policy from services
         policy = None
         policy_profile = "standard"
-        if hasattr(ctx, 'services'):
-            services = ctx.services
+        if hasattr(context, "services"):
+            services = context.services
             policy = services.get("policy")
             policy_profile = services.get("policy_profile", "standard")
 
