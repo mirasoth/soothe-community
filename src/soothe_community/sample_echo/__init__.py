@@ -30,10 +30,7 @@ class SampleEchoPlugin:
 
     @subagent(
         name="sample_echo",
-        description=(
-            "Echoes the user's last message with a sample_echo tag. "
-            "For automated tests only."
-        ),
+        description=("Echoes the user's last message with a sample_echo tag. For automated tests only."),
     )
     async def create_sample_echo(
         self,

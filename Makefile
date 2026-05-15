@@ -289,4 +289,3 @@ t: test-quick ## Shortcut: test-quick
 c: check-all ## Shortcut: check-all
 b: build ## Shortcut: build
 cl: clean ## Shortcut: clean
->>>>>>> fd703fa (Refactor: Adapt community plugins to soothe-sdk architecture)

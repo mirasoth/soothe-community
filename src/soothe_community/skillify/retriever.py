@@ -66,7 +66,7 @@ class SkillRetriever:
     ) -> None:
         self._vector_store = vector_store
         if callable(embeddings):
-            self._embeddings = LazyEmbeddings(embeddings)
+            self._embeddings: Embeddings | LazyEmbeddings = LazyEmbeddings(embeddings)
         else:
             self._embeddings = embeddings
         self._top_k = top_k

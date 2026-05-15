@@ -141,7 +141,7 @@ def make_nodes(store: AsyncPersistStore, user_id: str) -> dict[str, Callable]:
                     if result.published.date() < start_date:
                         continue
 
-                    paper = ArxivPaper(
+                    arxiv_item = ArxivPaper(
                         title=result.title,
                         summary=result.summary,
                         authors=[author.name for author in result.authors],
@@ -149,7 +149,7 @@ def make_nodes(store: AsyncPersistStore, user_id: str) -> dict[str, Callable]:
                         pdf_url=result.pdf_url,
                         published_date=result.published,
                     )
-                    arxiv_papers.append(paper)
+                    arxiv_papers.append(arxiv_item)
 
             _emit_step_event("data_collection", f"Found {len(arxiv_papers)} papers from ArXiv")
 
@@ -189,7 +189,7 @@ def make_nodes(store: AsyncPersistStore, user_id: str) -> dict[str, Callable]:
                         items = zot.everything(zot.top())
                         for item in items:
                             data = item.get("data", {})
-                            paper = ZoteroPaper(
+                            zotero_item = ZoteroPaper(
                                 zotero_item_key=item.get("key", ""),
                                 title=data.get("title", ""),
                                 authors=[creator.get("name", "") for creator in data.get("creators", [])],
@@ -201,7 +201,7 @@ def make_nodes(store: AsyncPersistStore, user_id: str) -> dict[str, Callable]:
                                 else None,
                                 collection_paths=[],
                             )
-                            zotero_papers.append(paper)
+                            zotero_papers.append(zotero_item)
 
                         # Cache for 24 hours
                         await store.save(

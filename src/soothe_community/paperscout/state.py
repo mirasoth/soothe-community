@@ -6,7 +6,7 @@ Pydantic v2 models for configuration and LangGraph agent state.
 from __future__ import annotations
 
 from datetime import date
-from typing import Annotated, Any
+from typing import Annotated, Any, TypedDict
 
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, ConfigDict, Field
@@ -120,7 +120,7 @@ class PaperScoutConfig(BaseModel):
     )
 
 
-class AgentState(dict):
+class AgentState(TypedDict):
     """LangGraph agent state for PaperScout workflow.
 
     This state flows through the workflow nodes:
@@ -136,25 +136,25 @@ class AgentState(dict):
     user_id: str
 
     # Discovered papers
-    discovered_papers: list[ArxivPaper] = Field(default_factory=list)
+    discovered_papers: list[ArxivPaper]
 
     # Zotero corpus
-    zotero_papers: list[Any] = Field(default_factory=list)  # ZoteroPaper objects
+    zotero_papers: list[Any]  # ZoteroPaper objects
 
     # Scored papers
-    scored_papers: list[ScoredPaper] = Field(default_factory=list)
+    scored_papers: list[ScoredPaper]
 
     # Email content
-    email_content: EmailContent | None = None
+    email_content: EmailContent | None
 
     # Error tracking
-    errors: Annotated[list[str], "add"] = Field(default_factory=list)
+    errors: Annotated[list[str], "add"]
 
     # Info messages
-    info: Annotated[list[str], "add"] = Field(default_factory=list)
+    info: Annotated[list[str], "add"]
 
     # Metrics
-    metrics: dict[str, Any] = Field(default_factory=dict)
+    metrics: dict[str, Any]
 
 
 __all__ = [

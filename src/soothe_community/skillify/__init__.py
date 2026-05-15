@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, TypedDict
 
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
@@ -57,10 +57,10 @@ def _emit_event(event_dict: dict[str, Any], ctx_logger: logging.Logger) -> None:
     ctx_logger.info(f"[{event_type}] {event_dict}")
 
 
-class SkillifyState(dict):
+class SkillifyState(TypedDict):
     """State for the Skillify retrieval graph."""
 
-    messages: Annotated[list, add_messages]
+    messages: Annotated[list[Any], add_messages]
 
 
 def _build_skillify_graph(retriever: SkillRetriever) -> Any:
@@ -98,7 +98,7 @@ def _build_skillify_graph(retriever: SkillRetriever) -> Any:
                 result_count=len(bundle.results),
                 top_score=round(top_score, 3),
             ).to_dict(),
-            logger
+            logger,
         )
 
         result_lines = [f"Found {len(bundle.results)} relevant skills (total indexed: {bundle.total_indexed}):\n"]
@@ -116,7 +116,7 @@ def _build_skillify_graph(retriever: SkillRetriever) -> Any:
                 duration_ms=0,
                 result_count=len(bundle.results),
             ).to_dict(),
-            logger
+            logger,
         )
         return {"messages": [AIMessage(content=result_text)]}
 
@@ -146,7 +146,7 @@ def _build_skillify_graph(retriever: SkillRetriever) -> Any:
 def _resolve_dependencies(soothe_cfg: Any) -> tuple[Any, Any]:
     """Resolve VectorStore and Embeddings from context services."""
     # Use context services if available
-    if hasattr(soothe_cfg, 'services'):
+    if hasattr(soothe_cfg, "services"):
         services = soothe_cfg.services
         vector_store = services.get("vector_store")
         embeddings_factory = services.get("embeddings_factory")
@@ -154,7 +154,7 @@ def _resolve_dependencies(soothe_cfg: Any) -> tuple[Any, Any]:
             return vector_store, embeddings_factory
 
     # Fallback: use soothe_config protocol methods
-    if hasattr(soothe_cfg, 'create_vector_store_for_role'):
+    if hasattr(soothe_cfg, "create_vector_store_for_role"):
         vs = soothe_cfg.create_vector_store_for_role("skillify")
         embeddings_factory = soothe_cfg.create_embedding_model
         return vs, embeddings_factory
@@ -233,7 +233,7 @@ class SkillifyPlugin:
 
         # Resolve warehouse paths
         soothe_home = Path.home() / ".soothe"  # Default SOOTHE_HOME
-        if hasattr(soothe_cfg, 'home'):
+        if hasattr(soothe_cfg, "home"):
             soothe_home = Path(soothe_cfg.home)
 
         default_warehouse = str(soothe_home / "agents" / "skillify" / "warehouse")
@@ -249,14 +249,6 @@ class SkillifyPlugin:
         interval = skillify_cfg.get("index_interval_seconds", 300)
         top_k = skillify_cfg.get("retrieval_top_k", 10)
         embedding_dims = skillify_cfg.get("embedding_dims", 1536)
-
-        # Get policy from services
-        policy = None
-        policy_profile = "standard"
-        if hasattr(context, "services"):
-            services = context.services
-            policy = services.get("policy")
-            policy_profile = services.get("policy_profile", "standard")
 
         def emit_callback(event: dict[str, Any]) -> None:
             _emit_event(event, ctx_logger)

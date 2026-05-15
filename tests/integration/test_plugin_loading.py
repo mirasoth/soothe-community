@@ -28,7 +28,7 @@ async def test_community_plugins_load_via_lifecycle():
 
     # 4. Check community plugins were discovered
     names = set(discovered.keys())
-    assert "browser" in names  # built-in subagent
+    assert "browser" in names  # soothe-community browser plugin (entry point)
     assert "execution" in names  # built-in tool
     assert "paperscout" in names, "paperscout not discovered via entry points"
     assert "skillify" in names, "skillify not discovered via entry points"

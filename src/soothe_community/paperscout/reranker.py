@@ -150,14 +150,14 @@ class PaperReranker:
             )
 
             # Extract paper summaries
-            paper_texts = []
-            valid_papers = []
-            for paper in self.papers:
-                if paper.summary and len(paper.summary.strip()) > 0:
-                    paper_texts.append(paper.summary)
-                    valid_papers.append(paper)
+            paper_texts: list[str] = []
+            valid_papers: list[ArxivPaper] = []
+            for arxiv_paper in self.papers:
+                if arxiv_paper.summary and len(arxiv_paper.summary.strip()) > 0:
+                    paper_texts.append(arxiv_paper.summary)
+                    valid_papers.append(arxiv_paper)
                 else:
-                    logger.warning(f"Paper {paper.arxiv_id} has no summary, skipping")
+                    logger.warning(f"Paper {arxiv_paper.arxiv_id} has no summary, skipping")
 
             if not paper_texts:
                 logger.warning("No valid paper summaries to rank")
@@ -181,10 +181,10 @@ class PaperReranker:
             scores = (similarities * time_decay_weight).sum(axis=1) * 10
 
             # Create scored papers
-            scored_papers = []
-            for paper, score, sim_vector in zip(valid_papers, scores, similarities):
+            scored_papers: list[ScoredPaper] = []
+            for arxiv_paper, score, sim_vector in zip(valid_papers, scores, similarities):
                 scored_paper = ScoredPaper(
-                    paper=paper,
+                    paper=arxiv_paper,
                     score=float(score),
                     relevance_factors={
                         "corpus_similarity": float(score),

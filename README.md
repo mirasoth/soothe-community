@@ -10,6 +10,10 @@ pip install soothe-community
 
 ## Available Plugins
 
+### Browser and Claude Code
+
+Delegated **browser-use** and **Claude agent SDK** subagents (IG-415). Install with `pip install "soothe-community[browser]"` or `"soothe-community[claude]"` and enable `subagents.browser` / `subagents.claude` in config. Spec: `docs/RFC-601-community-agents.md`.
+
 ### PaperScout
 
 ArXiv paper recommendation agent that delivers personalized daily paper recommendations.

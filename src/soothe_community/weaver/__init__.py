@@ -11,7 +11,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, TypedDict
 
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
@@ -58,6 +58,17 @@ logger = logging.getLogger(__name__)
 
 _MIN_CHUNK_TUPLE_LENGTH = 2
 
+
+def _emit_event(event_dict: dict[str, Any], ctx_logger: logging.Logger) -> None:
+    """Emit progress event via logger or event emission.
+
+    For community plugins, we use logger.info() for visibility.
+    Daemon may intercept and convert to progress events.
+    """
+    event_type = event_dict.get("type", "unknown")
+    ctx_logger.info(f"[{event_type}] {event_dict}")
+
+
 WEAVER_DESCRIPTION = (
     "Generative agent framework that creates task-specific subagents on the fly. "
     "Given a task that existing subagents cannot handle, Weaver analyses requirements, "
@@ -67,12 +78,10 @@ WEAVER_DESCRIPTION = (
 )
 
 
-
-
-class WeaverState(dict):
+class WeaverState(TypedDict):
     """State for the Weaver LangGraph."""
 
-    messages: Annotated[list, add_messages]
+    messages: Annotated[list[Any], add_messages]
 
 
 def _build_weaver_graph(
@@ -150,7 +159,8 @@ def _build_weaver_graph(
             WeaverAnalysisCompletedEvent(
                 capabilities=capability.required_capabilities,
                 constraints=capability.constraints,
-            ).to_dict()
+            ).to_dict(),
+            logger,
         )
 
         reuse_candidate = await reuse_index.find_reusable(capability)
@@ -160,7 +170,8 @@ def _build_weaver_graph(
                 WeaverReuseHitEvent(
                     agent_name=reuse_candidate.manifest.name,
                     confidence=round(reuse_candidate.confidence, 3),
-                ).to_dict()
+                ).to_dict(),
+                logger,
             )
             return await _execute_existing(reuse_candidate, task_text)
 
@@ -191,7 +202,8 @@ def _build_weaver_graph(
         _emit_event(
             WeaverHarmonizeStartedEvent(
                 skill_count=len(skill_bundle.results),
-            ).to_dict()
+            ).to_dict(),
+            logger,
         )
         blueprint = await composer.compose(capability, skill_bundle)
         _emit_event(
@@ -199,7 +211,8 @@ def _build_weaver_graph(
                 retained=len(blueprint.harmonized.skills),
                 dropped=len(blueprint.harmonized.dropped_skills),
                 bridge_length=len(blueprint.harmonized.bridge_instructions),
-            ).to_dict()
+            ).to_dict(),
+            logger,
         )
 
         _check_policy(action="subagent_spawn", tool_name="weaver.generate", tool_args={"goal": capability.description})
@@ -210,7 +223,8 @@ def _build_weaver_graph(
             WeaverGenerateCompletedEvent(
                 agent_name=manifest.name,
                 path=str(output_dir),
-            ).to_dict()
+            ).to_dict(),
+            logger,
         )
 
         _emit_event(WeaverValidateStartedEvent(agent_name=manifest.name).to_dict(), logger)
@@ -224,7 +238,8 @@ def _build_weaver_graph(
             WeaverRegistryUpdatedEvent(
                 agent_name=manifest.name,
                 version=manifest.version,
-            ).to_dict()
+            ).to_dict(),
+            logger,
         )
 
         return await _execute_generated(manifest, output_dir, task_text, model)
@@ -243,7 +258,8 @@ def _build_weaver_graph(
             WeaverExecuteStartedEvent(
                 agent_name=manifest.name,
                 task_preview=task[:200],
-            ).to_dict()
+            ).to_dict(),
+            logger,
         )
 
         prompt_path = agent_dir / manifest.system_prompt_file
@@ -289,14 +305,16 @@ def _build_weaver_graph(
             WeaverExecuteCompletedEvent(
                 agent_name=manifest.name,
                 result_length=len(result_text),
-            ).to_dict()
+            ).to_dict(),
+            logger,
         )
 
         _emit_event(
             WeaverCompletedEvent(
                 duration_ms=0,
                 agent_name=manifest.name,
-            ).to_dict()
+            ).to_dict(),
+            logger,
         )
 
         return {"messages": [AIMessage(content=result_text)]}

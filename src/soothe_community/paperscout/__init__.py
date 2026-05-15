@@ -160,12 +160,12 @@ class PaperScoutPlugin:
 
         # Get persistence store from context services
         store = kwargs.get("store")
-        if not store and hasattr(config, 'services'):
+        if not store and hasattr(config, "services"):
             store = config.services.get("persistence")
         if not store:
-            if hasattr(config, 'soothe_config'):
+            if hasattr(config, "soothe_config"):
                 soothe_cfg = config.soothe_config
-                if hasattr(soothe_cfg, 'services'):
+                if hasattr(soothe_cfg, "services"):
                     store = soothe_cfg.services.get("persistence")
             if not store:
                 msg = "PaperScout requires AsyncPersistStore (e.g. kwargs['store'] or context services)"

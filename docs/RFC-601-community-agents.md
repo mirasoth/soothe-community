@@ -1,4 +1,4 @@
-# RFC-601 (Community): Skillify and Weaver Agents
+# RFC-601 (Community): Skillify, Weaver, Browser, and Claude Agents
 
 **Status**: Implemented (Community Plugin)
 **Package**: `soothe-community`
@@ -11,7 +11,7 @@
 
 ## 1. Abstract
 
-This RFC defines the architecture of two community plugin agents for Soothe: **Skillify** (skill indexing and retrieval) and **Weaver** (generative agent composition). These agents are distributed via the `soothe-community` package and loaded through RFC-600 entry-point discovery.
+This RFC defines the architecture of community plugin agents for Soothe: **Skillify** (skill indexing and retrieval), **Weaver** (generative agent composition), **Browser** (browser-use automation), and **Claude** (Claude Code via claude-agent-sdk). These agents are distributed via the `soothe-community` package and loaded through RFC-600 entry-point discovery.
 
 ---
 
@@ -20,7 +20,8 @@ This RFC defines the architecture of two community plugin agents for Soothe: **S
 This RFC defines:
 - Skillify agent architecture (background indexing, retrieval subagent)
 - Weaver agent architecture (reuse-first generation, skill harmonization)
-- Plugin definitions for both community agents
+- Browser and Claude Code plugin packages (`soothe_community.browser`, `soothe_community.claude`)
+- Plugin definitions for all community agents
 - Integration contracts with protocols
 - Cross-plugin dependency (Weaver depends on Skillify)
 
@@ -266,6 +267,8 @@ async def on_load(self, context):
 
 ```
 community/src/soothe_community/
+├── browser/                  # BrowserPlugin (browser-use)
+├── claude/                   # ClaudePlugin (claude-agent-sdk)
 ├── skillify/
 │   ├── __init__.py           # SkillifyPlugin + exports
 │   ├── events.py             # Skillify events
@@ -290,15 +293,25 @@ community/src/soothe_community/
 
 ```bash
 pip install soothe-community
+# Optional subagents:
+pip install "soothe-community[browser]"
+pip install "soothe-community[claude]"
 ```
 
 Plugins are auto-discovered via entry points in `pyproject.toml`:
 
 ```toml
 [project.entry-points."soothe.plugins"]
+browser = "soothe_community.browser:BrowserPlugin"
+claude = "soothe_community.claude:ClaudePlugin"
 skillify = "soothe_community.skillify:SkillifyPlugin"
 weaver = "soothe_community.weaver:WeaverPlugin"
 ```
+
+### 7.1 Browser and Claude (IG-415)
+
+- **Browser**: `soothe_community.browser` — `BrowserSubagentConfig` validates `subagents.browser.config` in the plugin factory; wire events register via `soothe_sdk.plugin.registry.register_event`.
+- **Claude**: `soothe_community.claude` — session bridge `cleanup_claude_sessions` is imported optionally from the daemon when loops are deleted.
 
 ---
 
@@ -321,11 +334,13 @@ weaver = "soothe_community.weaver:WeaverPlugin"
 
 ## 10. Conclusion
 
-This RFC documents two community plugin agents for Soothe:
+This RFC documents community plugin agents for Soothe:
 
 - **Skillify**: Skill warehouse indexing and semantic retrieval
 - **Weaver**: Generative agent composition with skill harmonization
+- **Browser**: Browser-use automation (optional extra)
+- **Claude**: Claude Code agent wrapper (optional extra)
 
-Both follow the RFC-600 plugin architecture with `@plugin` + `@subagent` decorators, self-contained package structure, and entry-point discovery via `soothe-community`.
+All follow the RFC-600 plugin architecture with `@plugin` + `@subagent` decorators, self-contained package structure, and entry-point discovery via `soothe-community`.
 
 > **Community agents demonstrate the plugin pattern: @plugin + @subagent + self-contained package.**

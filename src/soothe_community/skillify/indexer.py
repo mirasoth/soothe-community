@@ -69,7 +69,7 @@ class SkillIndexer:
         self._warehouse = warehouse
         self._vector_store = vector_store
         if callable(embeddings):
-            self._embeddings = LazyEmbeddings(embeddings)
+            self._embeddings: Embeddings | LazyEmbeddings = LazyEmbeddings(embeddings)
         else:
             self._embeddings = embeddings
         self._interval = interval_seconds
